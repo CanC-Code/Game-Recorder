@@ -8,12 +8,11 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.media.projection.MediaProjection
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.ByteBuffer
 
 class MuxerPipeline(
     private val mediaProjection: MediaProjection,
@@ -80,7 +79,8 @@ class MuxerPipeline(
                 customDir.mkdirs()
             }
             val file = File(customDir, fileName)
-            return MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val absolutePathStr: String = file.absolutePath
+            return MediaMuxer(absolutePathStr, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         }
 
         // Default to MediaStore Movies directory if no custom path provided
@@ -88,7 +88,9 @@ class MuxerPipeline(
         val contentValues = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-            put(MediaStore.Video.Media.RELATIVE_DIR, Environment.DIRECTORY_MOVIES + "/GameRecorder")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/GameRecorder")
+            }
         }
 
         val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
@@ -97,7 +99,8 @@ class MuxerPipeline(
         val pfd = resolver.openFileDescriptor(uri, "w")
             ?: throw IllegalStateException("Failed to open file descriptor for MediaStore entry")
 
-        return MediaMuxer(pfd.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val fileDescriptorObj = pfd.fileDescriptor
+        return MediaMuxer(fileDescriptorObj, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     }
 
     private fun startEncodingLoop() {
@@ -137,7 +140,6 @@ class MuxerPipeline(
 
     fun pause() {
         isPaused = true
-        // Additional pause signal handling if surface routing drops frames
     }
 
     fun resume() {
