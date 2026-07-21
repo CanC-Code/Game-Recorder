@@ -20,14 +20,16 @@ class RecordingService : Service() {
         super.onCreate()
         val channelId = "recording_channel"
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager?.createNotificationChannel(NotificationChannel(channelId, "Recording Service", NotificationManager.IMPORTANCE_LOW))
-        
+        notificationManager?.createNotificationChannel(
+            NotificationChannel(channelId, "Recording Service", NotificationManager.IMPORTANCE_LOW)
+        )
+
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Game Recorder")
             .setContentText("Awaiting match capture")
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } else {
@@ -39,14 +41,14 @@ class RecordingService : Service() {
         val code = intent?.getIntExtra("code", 0) ?: 0
         val data = intent?.getParcelableExtra<Intent>("data")
         val customOutputPath = intent?.getStringExtra("output_path")
-        
+
         if (code != 0 && data != null) {
             val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val projection = projectionManager.getMediaProjection(code, data)
-            
+
             if (projection != null) {
                 muxerPipeline = MuxerPipeline(projection, customOutputPath)
-                
+
                 controlManager = FloatingControlManager(
                     this,
                     onStart = {
@@ -54,16 +56,16 @@ class RecordingService : Service() {
                             if (notificationManager?.isNotificationPolicyAccessGranted == true) {
                                 notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
                             }
-                        } catch (e: Exception) {}
+                        } catch (_: Exception) {}
                         muxerPipeline?.start()
                     },
                     onPauseResume = {
                         if (muxerPipeline?.isPaused == true) {
                             muxerPipeline?.resume()
-                            false // Returns to manager indicating recording is NOT paused
+                            false // Recording active -> show Pause icon (⏸)
                         } else {
                             muxerPipeline?.pause()
-                            true // Returns to manager indicating recording IS paused
+                            true // Recording paused -> show Play icon (▶)
                         }
                     },
                     onStop = {
@@ -71,7 +73,7 @@ class RecordingService : Service() {
                             if (notificationManager?.isNotificationPolicyAccessGranted == true) {
                                 notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
                             }
-                        } catch (e: Exception) {}
+                        } catch (_: Exception) {}
                         muxerPipeline?.stop()
                         stopSelf()
                     }
