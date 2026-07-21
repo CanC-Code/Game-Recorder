@@ -54,23 +54,24 @@ class RecordingService : Service() {
                             if (notificationManager?.isNotificationPolicyAccessGranted == true) {
                                 notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
                             }
-                        } catch (e: Exception) {
-                            // Suppress security or state exceptions if DND modification fails
-                        }
+                        } catch (e: Exception) {}
                         muxerPipeline?.start()
                     },
                     onPauseResume = {
-                        if (muxerPipeline?.isPaused == true) muxerPipeline?.resume()
-                        else muxerPipeline?.pause()
+                        if (muxerPipeline?.isPaused == true) {
+                            muxerPipeline?.resume()
+                            false // Returns to manager indicating recording is NOT paused
+                        } else {
+                            muxerPipeline?.pause()
+                            true // Returns to manager indicating recording IS paused
+                        }
                     },
                     onStop = {
                         try {
                             if (notificationManager?.isNotificationPolicyAccessGranted == true) {
                                 notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
                             }
-                        } catch (e: Exception) {
-                            // Suppress security or state exceptions if DND modification fails
-                        }
+                        } catch (e: Exception) {}
                         muxerPipeline?.stop()
                         stopSelf()
                     }
