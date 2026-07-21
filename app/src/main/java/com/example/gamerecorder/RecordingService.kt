@@ -38,24 +38,26 @@ class RecordingService : Service() {
             val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val projection = projectionManager.getMediaProjection(code, data)
             
-            muxerPipeline = MuxerPipeline(projection)
-            
-            controlManager = FloatingControlManager(
-                this,
-                onStart = {
-                    dndManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-                    muxerPipeline?.start()
-                },
-                onPauseResume = {
-                    if (muxerPipeline?.isPaused == true) muxerPipeline?.resume()
-                    else muxerPipeline?.pause()
-                },
-                onStop = {
-                    dndManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
-                    muxerPipeline?.stop()
-                    stopSelf()
-                }
-            )
+            if (projection != null) {
+                muxerPipeline = MuxerPipeline(projection)
+                
+                controlManager = FloatingControlManager(
+                    this,
+                    onStart = {
+                        dndManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                        muxerPipeline?.start()
+                    },
+                    onPauseResume = {
+                        if (muxerPipeline?.isPaused == true) muxerPipeline?.resume()
+                        else muxerPipeline?.pause()
+                    },
+                    onStop = {
+                        dndManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                        muxerPipeline?.stop()
+                        stopSelf()
+                    }
+                )
+            }
         }
         return START_NOT_STICKY
     }
