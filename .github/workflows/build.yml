@@ -1,0 +1,41 @@
+name: Build Game Recorder
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+        
+      - name: Generate App Icons
+        run: |
+          # Create a temporary base icon if none exists for the CI build
+          mkdir -p app/src/main/res/raw
+          convert -size 512x512 canvas:blue app/src/main/res/raw/base_icon.png
+          chmod +x scripts/generate_icons.sh
+          ./scripts/generate_icons.sh
+          
+      - name: Bootstrap Gradle Wrapper
+        run: ./bootstrap.sh
+          
+      - name: Build Android App
+        run: ./gradlew assembleRelease
+        
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-recorder-release
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
