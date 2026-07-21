@@ -6,13 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
-import android.os.Environment
 import android.provider.Settings
 import android.widget.Button
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.textfield.TextInputEditText
-import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private lateinit var projectionManager: MediaProjectionManager
@@ -41,9 +39,6 @@ class MainActivity : AppCompatActivity() {
 
         projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         etOutputPath = findViewById(R.id.etOutputPath)
-
-        val defaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "GameRecorder")
-        etOutputPath.setText(defaultDir.absolutePath)
 
         val btnGrantCapture = findViewById<Button>(R.id.btnGrantCapture)
         btnGrantCapture.setOnClickListener {
