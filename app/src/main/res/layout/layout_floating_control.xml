@@ -60,7 +60,7 @@
             android:layout_width="44dp"
             android:layout_height="44dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_stop"
+            android:src="@android:drawable/ic_media_rew"
             android:contentDescription="Stop Recording" />
 
     </LinearLayout>
