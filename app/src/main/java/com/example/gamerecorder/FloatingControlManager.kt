@@ -12,6 +12,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import kotlin.math.abs
 
 class FloatingControlManager(
     private val context: Context,
@@ -75,7 +76,7 @@ class FloatingControlManager(
                     val deltaX = (event.rawX - initialTouchX).toInt()
                     val deltaY = (event.rawY - initialTouchY).toInt()
 
-                    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+                    if (abs(deltaX) > 5 || abs(deltaY) > 5) {
                         isDragging = true
                     }
 
@@ -115,11 +116,11 @@ class FloatingControlManager(
         }
 
         btnPauseResume.setOnClickListener {
-            val isCurrentlyPaused = onPauseResume()
-            if (isCurrentlyPaused) {
-                btnPauseResume.setImageResource(android.R.drawable.ic_media_play)
+            val isPaused = onPauseResume()
+            if (isPaused) {
+                btnPauseResume.setImageResource(R.drawable.ic_play)
             } else {
-                btnPauseResume.setImageResource(android.R.drawable.ic_media_pause)
+                btnPauseResume.setImageResource(R.drawable.ic_pause)
             }
         }
 
