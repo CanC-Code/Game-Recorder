@@ -39,9 +39,8 @@ class MainActivity : AppCompatActivity() {
 
         projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         etOutputPath = findViewById(R.id.etOutputPath)
-        
-        // Removed the file pre-generation that threw system permission rejections. 
-        // This hint signals the MediaStore default folder fallback managed by the pipeline.
+
+        // Clear pre-filled absolute paths to ensure default MediaStore placement in Movies/GameRecorder
         etOutputPath.hint = "Default: Movies/GameRecorder"
 
         val btnGrantCapture = findViewById<Button>(R.id.btnGrantCapture)
