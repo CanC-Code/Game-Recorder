@@ -1,22 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:background="#A6000000"
-    android:orientation="horizontal"
     android:padding="8dp">
 
-    <Button
-        android:id="@+id/btnAction"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Start" />
+    <!-- Main Collapsed Circular Button -->
+    <FrameLayout
+        android:id="@+id/btnMainCircle"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_floating_circle"
+        android:elevation="8dp"
+        android:clickable="true"
+        android:focusable="true">
 
-    <Button
-        android:id="@+id/btnStop"
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@android:drawable/ic_menu_camera"
+            android:contentDescription="Recorder Hub" />
+    </FrameLayout>
+
+    <!-- Expanded Control Container (Hidden by default) -->
+    <LinearLayout
+        android:id="@+id/layoutExpandedControls"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Stop"
+        android:orientation="horizontal"
         android:visibility="gone"
-        android:layout_marginStart="8dp"/>
-</LinearLayout>
+        android:background="@drawable/bg_floating_container"
+        android:elevation="8dp"
+        android:padding="6dp"
+        android:gravity="center">
+
+        <!-- Start / Record Button -->
+        <ImageButton
+            android:id="@+id/btnStart"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_play"
+            android:contentDescription="Start Recording" />
+
+        <!-- Pause / Resume Button -->
+        <ImageButton
+            android:id="@+id/btnPauseResume"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_pause"
+            android:contentDescription="Pause/Resume Recording" />
+
+        <!-- Stop Button -->
+        <ImageButton
+            android:id="@+id/btnStop"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_stop"
+            android:contentDescription="Stop Recording" />
+
+    </LinearLayout>
+
+</FrameLayout>
