@@ -1,180 +1,168 @@
 package com.example.gamerecorder
 
-import android.annotation.SuppressLint
-import android.content.Context
+import android.content.ContentValues
 import android.hardware.display.DisplayManager
-import android.media.*
+import android.hardware.display.VirtualDisplay
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import android.media.projection.MediaProjection
 import android.os.Environment
+import android.provider.MediaStore
+import android.util.Log
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
-import kotlin.concurrent.thread
 
 class MuxerPipeline(
-    private val projection: MediaProjection,
-    private val width: Int = 1920,
-    private val height: Int = 1080
+    private val mediaProjection: MediaProjection,
+    private val customOutputPath: String? = null
 ) {
-    private var muxer: MediaMuxer? = null
-    private var videoCodec: MediaCodec? = null
-    private var audioCodec: MediaCodec? = null
-    private var audioRecord: AudioRecord? = null
-
-    private var videoTrackIndex = -1
-    private var audioTrackIndex = -1
+    private var encoder: MediaCodec? = null
+    private var virtualDisplay: VirtualDisplay? = null
+    private var mediaMuxer: MediaMuxer? = null
+    private var trackIndex = -1
     private var isMuxerStarted = false
+    private var isRunning = false
+    var isPaused = false
+        private set
 
-    @Volatile var isRecording = false
-    @Volatile var isPaused = false
+    companion object {
+        private const val TAG = "MuxerPipeline"
+        private const val WIDTH = 1080
+        private const val HEIGHT = 1920
+        private const val BIT_RATE = 5_000_000 // 5 Mbps VBR
+        private const val FRAME_RATE = 60
+        private const val I_FRAME_INTERVAL = 1
+    }
 
-    private var pauseOffsetUs: Long = 0
-    private var lastPauseStartUs: Long = 0
-
-    @SuppressLint("MissingPermission")
     fun start() {
-        val outputFile = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
-            "UniteCapture_${System.currentTimeMillis()}.mp4"
-        )
-        muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-        // Setup Video (H.265 / HEVC @ 5 Mbps)
-        val videoFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, width, height).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, 5_000_000) 
-            setInteger(MediaFormat.KEY_FRAME_RATE, 60)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
-        }
-        videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC)
-        videoCodec?.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        val surface = videoCodec?.createInputSurface()
-        
-        projection.createVirtualDisplay(
-            "GameRecorder", width, height, 400,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            surface, null, null
-        )
-        videoCodec?.start()
-
-        // Setup Internal Audio (AudioPlaybackCapture)
-        val sampleRate = 48000
-        val audioFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, 2).apply {
-            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            setInteger(MediaFormat.KEY_BIT_RATE, 192000)
-        }
-        audioCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-        audioCodec?.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        audioCodec?.start()
-
-        val audioConfig = AudioPlaybackCaptureConfiguration.Builder(projection)
-            .addMatchingUsage(AudioAttributes.USAGE_GAME)
-            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-            .build()
-            
-        val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
-        audioRecord = AudioRecord.Builder()
-            .setAudioFormat(AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setSampleRate(sampleRate)
-                .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
-                .build())
-            .setAudioPlaybackCaptureConfig(audioConfig)
-            .setBufferSizeInBytes(minBufferSize * 2)
-            .build()
-            
-        audioRecord?.startRecording()
-        isRecording = true
-
-        startVideoThread()
-        startAudioThread()
-    }
-
-    private fun startVideoThread() = thread {
-        val bufferInfo = MediaCodec.BufferInfo()
-        while (isRecording) {
-            val index = videoCodec?.dequeueOutputBuffer(bufferInfo, 10000) ?: -1
-            if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                videoTrackIndex = muxer!!.addTrack(videoCodec!!.outputFormat)
-                checkStartMuxer()
-            } else if (index >= 0) {
-                val encodedData = videoCodec?.getOutputBuffer(index)
-                if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) bufferInfo.size = 0
-                if (bufferInfo.size != 0 && isMuxerStarted && !isPaused) {
-                    bufferInfo.presentationTimeUs -= pauseOffsetUs
-                    muxer?.writeSampleData(videoTrackIndex, encodedData!!, bufferInfo)
-                }
-                videoCodec?.releaseOutputBuffer(index, false)
+        if (isRunning) return
+        try {
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, WIDTH, HEIGHT).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+                setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE)
+                setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
             }
+
+            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC).apply {
+                configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                val surface = createInputSurface()
+                
+                virtualDisplay = mediaProjection.createVirtualDisplay(
+                    "GameRecorderDisplay",
+                    WIDTH, HEIGHT, 1,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    surface, null, null
+                )
+
+                mediaMuxer = createMediaMuxer()
+                start()
+            }
+
+            isRunning = true
+            isPaused = false
+            startEncodingLoop()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start MuxerPipeline", e)
+            stop()
         }
     }
 
-    private fun startAudioThread() = thread {
-        val bufferInfo = MediaCodec.BufferInfo()
-        val pcmBuffer = ByteBuffer.allocateDirect(4096)
-        while (isRecording) {
-            if (isPaused) {
-                Thread.sleep(10)
-                continue
+    private fun createMediaMuxer(): MediaMuxer {
+        val fileName = "PokemonUnite_${System.currentTimeMillis()}.mp4"
+
+        if (!customOutputPath.isNullOrEmpty()) {
+            val customDir = File(customOutputPath)
+            if (!customDir.exists()) {
+                customDir.mkdirs()
             }
-            val read = audioRecord?.read(pcmBuffer, 4096) ?: 0
-            if (read > 0) {
-                val inIndex = audioCodec?.dequeueInputBuffer(10000) ?: -1
-                if (inIndex >= 0) {
-                    val inBuffer = audioCodec?.getInputBuffer(inIndex)
-                    inBuffer?.clear()
-                    inBuffer?.put(pcmBuffer)
-                    audioCodec?.queueInputBuffer(inIndex, 0, read, System.nanoTime() / 1000 - pauseOffsetUs, 0)
-                }
-            }
-            val outIndex = audioCodec?.dequeueOutputBuffer(bufferInfo, 10000) ?: -1
-            if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                audioTrackIndex = muxer!!.addTrack(audioCodec!!.outputFormat)
-                checkStartMuxer()
-            } else if (outIndex >= 0) {
-                val encodedData = audioCodec?.getOutputBuffer(outIndex)
-                if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) bufferInfo.size = 0
-                if (bufferInfo.size != 0 && isMuxerStarted) {
-                    muxer?.writeSampleData(audioTrackIndex, encodedData!!, bufferInfo)
-                }
-                audioCodec?.releaseOutputBuffer(outIndex, false)
-            }
+            val file = File(customDir, fileName)
+            return MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         }
+
+        // Default to MediaStore Movies directory if no custom path provided
+        val resolver = App.context.contentResolver
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.RELATIVE_DIR, Environment.DIRECTORY_MOVIES + "/GameRecorder")
+        }
+
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+            ?: throw IllegalStateException("Failed to create MediaStore entry")
+
+        val pfd = resolver.openFileDescriptor(uri, "w")
+            ?: throw IllegalStateException("Failed to open file descriptor for MediaStore entry")
+
+        return MediaMuxer(pfd.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     }
 
-    private fun checkStartMuxer() {
-        if (videoTrackIndex >= 0 && audioTrackIndex >= 0 && !isMuxerStarted) {
-            muxer?.start()
-            isMuxerStarted = true
-        }
+    private fun startEncodingLoop() {
+        Thread {
+            val bufferInfo = MediaCodec.BufferInfo()
+            while (isRunning) {
+                try {
+                    val encoderRef = encoder ?: break
+                    val outputIndex = encoderRef.dequeueOutputBuffer(bufferInfo, 10000)
+
+                    when {
+                        outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            trackIndex = mediaMuxer?.addTrack(encoderRef.outputFormat) ?: -1
+                            mediaMuxer?.start()
+                            isMuxerStarted = true
+                        }
+                        outputIndex >= 0 -> {
+                            val encodedData = encoderRef.getOutputBuffer(outputIndex)
+                            if (encodedData != null && isMuxerStarted) {
+                                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                                    mediaMuxer?.writeSampleData(trackIndex, encodedData, bufferInfo)
+                                }
+                            }
+                            encoderRef.releaseOutputBuffer(outputIndex, false)
+                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                break
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in encoding loop", e)
+                    break
+                }
+            }
+        }.start()
     }
 
     fun pause() {
-        if (!isPaused) {
-            lastPauseStartUs = System.nanoTime() / 1000
-            isPaused = true
-        }
+        isPaused = true
+        // Additional pause signal handling if surface routing drops frames
     }
 
     fun resume() {
-        if (isPaused) {
-            pauseOffsetUs += (System.nanoTime() / 1000) - lastPauseStartUs
-            isPaused = false
-        }
+        isPaused = false
     }
 
     fun stop() {
-        isRecording = false
-        Thread.sleep(200) 
-        audioRecord?.stop()
-        audioRecord?.release()
-        videoCodec?.stop()
-        videoCodec?.release()
-        audioCodec?.stop()
-        audioCodec?.release()
-        if (isMuxerStarted) {
-            muxer?.stop()
-            muxer?.release()
+        if (!isRunning) return
+        isRunning = false
+        try {
+            virtualDisplay?.release()
+            virtualDisplay = null
+
+            encoder?.stop()
+            encoder?.release()
+            encoder = null
+
+            if (isMuxerStarted) {
+                mediaMuxer?.stop()
+                mediaMuxer?.release()
+                mediaMuxer = null
+                isMuxerStarted = false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping MuxerPipeline", e)
         }
-        projection.stop()
     }
 }
