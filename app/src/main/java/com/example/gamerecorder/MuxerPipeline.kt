@@ -23,15 +23,20 @@ class MuxerPipeline(
     private var mediaMuxer: MediaMuxer? = null
     private var trackIndex = -1
     private var isMuxerStarted = false
-    private var isRunning = false
+    
+    @Volatile private var isRunning = false
+    
     var isPaused = false
         private set
+
+    private var totalPauseTimeUs = 0L
+    private var pauseStartTimeUs = 0L
 
     companion object {
         private const val TAG = "MuxerPipeline"
         private const val WIDTH = 1080
         private const val HEIGHT = 1920
-        private const val BIT_RATE = 5_000_000 // 5 Mbps VBR
+        private const val BIT_RATE = 5_000_000
         private const val FRAME_RATE = 60
         private const val I_FRAME_INTERVAL = 1
     }
@@ -63,27 +68,30 @@ class MuxerPipeline(
 
             isRunning = true
             isPaused = false
+            totalPauseTimeUs = 0L
+            pauseStartTimeUs = 0L
+            
             startEncodingLoop()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start MuxerPipeline", e)
-            stop()
+            releaseResources()
         }
     }
 
     private fun createMediaMuxer(): MediaMuxer {
-        val fileName = "PokemonUnite_${System.currentTimeMillis()}.mp4"
+        val fileName = "GameRecorder_${System.currentTimeMillis()}.mp4"
 
+        // Handle strict custom paths if provided
         if (!customOutputPath.isNullOrEmpty()) {
             val customDir = File(customOutputPath)
             if (!customDir.exists()) {
                 customDir.mkdirs()
             }
             val file = File(customDir, fileName)
-            val absolutePathStr: String = file.absolutePath
-            return MediaMuxer(absolutePathStr, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            return MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         }
 
-        // Default to MediaStore Movies directory if no custom path provided
+        // Default to safe MediaStore API specifically to bypass file permission errors
         val resolver = App.context.contentResolver
         val contentValues = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
@@ -97,17 +105,16 @@ class MuxerPipeline(
             ?: throw IllegalStateException("Failed to create MediaStore entry")
 
         val pfd = resolver.openFileDescriptor(uri, "w")
-            ?: throw IllegalStateException("Failed to open file descriptor for MediaStore entry")
+            ?: throw IllegalStateException("Failed to open file descriptor")
 
-        val fileDescriptorObj = pfd.fileDescriptor
-        return MediaMuxer(fileDescriptorObj, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        return MediaMuxer(pfd.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     }
 
     private fun startEncodingLoop() {
         Thread {
             val bufferInfo = MediaCodec.BufferInfo()
-            while (isRunning) {
-                try {
+            try {
+                while (isRunning) {
                     val encoderRef = encoder ?: break
                     val outputIndex = encoderRef.dequeueOutputBuffer(bufferInfo, 10000)
 
@@ -121,7 +128,20 @@ class MuxerPipeline(
                             val encodedData = encoderRef.getOutputBuffer(outputIndex)
                             if (encodedData != null && isMuxerStarted) {
                                 if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                                    mediaMuxer?.writeSampleData(trackIndex, encodedData, bufferInfo)
+                                    if (isPaused) {
+                                        // Track the timestamp when pause begins to calculate total offset
+                                        if (pauseStartTimeUs == 0L) {
+                                            pauseStartTimeUs = bufferInfo.presentationTimeUs
+                                        }
+                                    } else {
+                                        // Apply offset calculation if resuming
+                                        if (pauseStartTimeUs != 0L) {
+                                            totalPauseTimeUs += (bufferInfo.presentationTimeUs - pauseStartTimeUs)
+                                            pauseStartTimeUs = 0L
+                                        }
+                                        bufferInfo.presentationTimeUs -= totalPauseTimeUs
+                                        mediaMuxer?.writeSampleData(trackIndex, encodedData, bufferInfo)
+                                    }
                                 }
                             }
                             encoderRef.releaseOutputBuffer(outputIndex, false)
@@ -130,10 +150,11 @@ class MuxerPipeline(
                             }
                         }
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in encoding loop", e)
-                    break
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in encoding loop", e)
+            } finally {
+                releaseResources()
             }
         }.start()
     }
@@ -147,8 +168,11 @@ class MuxerPipeline(
     }
 
     fun stop() {
-        if (!isRunning) return
+        // Flag loop termination. The thread will handle safe resource release gracefully.
         isRunning = false
+    }
+
+    private fun releaseResources() {
         try {
             virtualDisplay?.release()
             virtualDisplay = null
@@ -164,7 +188,7 @@ class MuxerPipeline(
                 isMuxerStarted = false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping MuxerPipeline", e)
+            Log.e(TAG, "Error releasing resources", e)
         }
     }
 }
