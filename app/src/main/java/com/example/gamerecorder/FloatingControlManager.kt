@@ -3,6 +3,7 @@ package com.example.gamerecorder
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -18,7 +19,8 @@ class FloatingControlManager(
     private val onStop: () -> Unit
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val rootView: View = LayoutInflater.from(context).inflate(R.layout.layout_floating_control, null)
+    private val themedContext = ContextThemeWrapper(context, R.style.Theme_GameRecorder)
+    private val rootView: View = LayoutInflater.from(themedContext).inflate(R.layout.layout_floating_control, null)
 
     private val btnMainCircle: FrameLayout = rootView.findViewById(R.id.btnMainCircle)
     private val layoutExpandedControls: LinearLayout = rootView.findViewById(R.id.layoutExpandedControls)
