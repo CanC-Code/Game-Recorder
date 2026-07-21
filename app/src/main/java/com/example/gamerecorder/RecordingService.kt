@@ -1,6 +1,5 @@
 package com.example.gamerecorder
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -15,13 +14,13 @@ import androidx.core.app.NotificationCompat
 class RecordingService : Service() {
     private var controlManager: FloatingControlManager? = null
     private var muxerPipeline: MuxerPipeline? = null
-    private var dndManager: NotificationManager? = null
+    private var notificationManager: NotificationManager? = null
 
     override fun onCreate() {
         super.onCreate()
         val channelId = "recording_channel"
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(NotificationChannel(channelId, "Recording Service", NotificationManager.IMPORTANCE_LOW))
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager?.createNotificationChannel(NotificationChannel(channelId, "Recording Service", NotificationManager.IMPORTANCE_LOW))
         
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Game Recorder")
@@ -34,8 +33,6 @@ class RecordingService : Service() {
         } else {
             startForeground(1, notification)
         }
-        
-        dndManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,7 +50,13 @@ class RecordingService : Service() {
                 controlManager = FloatingControlManager(
                     this,
                     onStart = {
-                        dndManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                        try {
+                            if (notificationManager?.isNotificationPolicyAccessGranted == true) {
+                                notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                            }
+                        } catch (e: Exception) {
+                            // Suppress security or state exceptions if DND modification fails
+                        }
                         muxerPipeline?.start()
                     },
                     onPauseResume = {
@@ -61,7 +64,13 @@ class RecordingService : Service() {
                         else muxerPipeline?.pause()
                     },
                     onStop = {
-                        dndManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                        try {
+                            if (notificationManager?.isNotificationPolicyAccessGranted == true) {
+                                notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                            }
+                        } catch (e: Exception) {
+                            // Suppress security or state exceptions if DND modification fails
+                        }
                         muxerPipeline?.stop()
                         stopSelf()
                     }
