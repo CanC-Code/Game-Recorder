@@ -29,6 +29,7 @@ jobs:
           ./scripts/generate_icons.sh
           
       - name: Bootstrap Gradle Wrapper
+          chmod +x bootstrap.sh
         run: ./bootstrap.sh
           
       - name: Build Android App
