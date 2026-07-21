@@ -1,6 +1,7 @@
 package com.example.gamerecorder
 
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
@@ -45,11 +46,18 @@ class MainActivity : AppCompatActivity() {
 
         val btnGrantCapture = findViewById<Button>(R.id.btnGrantCapture)
         btnGrantCapture.setOnClickListener {
-            checkOverlayPermissionAndProceed()
+            checkPermissionsAndProceed()
         }
     }
 
-    private fun checkOverlayPermissionAndProceed() {
+    private fun checkPermissionsAndProceed() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (!notificationManager.isNotificationPolicyAccessGranted) {
+            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+            startActivity(intent)
+            return
+        }
+
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
