@@ -1,11 +1,14 @@
 package com.example.gamerecorder
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
@@ -26,20 +29,26 @@ class RecordingService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
         
-        startForeground(1, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(1, notification)
+        }
+        
         dndManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val code = intent?.getIntExtra("code", 0) ?: 0
         val data = intent?.getParcelableExtra<Intent>("data")
+        val customOutputPath = intent?.getStringExtra("output_path")
         
         if (code != 0 && data != null) {
             val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val projection = projectionManager.getMediaProjection(code, data)
             
             if (projection != null) {
-                muxerPipeline = MuxerPipeline(projection)
+                muxerPipeline = MuxerPipeline(projection, customOutputPath)
                 
                 controlManager = FloatingControlManager(
                     this,
