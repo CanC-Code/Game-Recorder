@@ -10,12 +10,13 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 
 class FloatingControlManager(
     private val context: Context,
     private val onStart: () -> Unit,
-    private val onPauseResume: () -> Unit,
+    private val onPauseResume: () -> Boolean,
     private val onStop: () -> Unit
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -25,7 +26,7 @@ class FloatingControlManager(
     private val btnMainCircle: FrameLayout = rootView.findViewById(R.id.btnMainCircle)
     private val layoutExpandedControls: LinearLayout = rootView.findViewById(R.id.layoutExpandedControls)
     private val btnStart: View = rootView.findViewById(R.id.btnStart)
-    private val btnPauseResume: View = rootView.findViewById(R.id.btnPauseResume)
+    private val btnPauseResume: ImageButton = rootView.findViewById(R.id.btnPauseResume)
     private val btnStop: View = rootView.findViewById(R.id.btnStop)
 
     private val layoutParams: WindowManager.LayoutParams = WindowManager.LayoutParams(
@@ -114,7 +115,12 @@ class FloatingControlManager(
         }
 
         btnPauseResume.setOnClickListener {
-            onPauseResume()
+            val isCurrentlyPaused = onPauseResume()
+            if (isCurrentlyPaused) {
+                btnPauseResume.setImageResource(android.R.drawable.ic_media_play)
+            } else {
+                btnPauseResume.setImageResource(android.R.drawable.ic_media_pause)
+            }
         }
 
         btnStop.setOnClickListener {
