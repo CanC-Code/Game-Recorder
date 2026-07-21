@@ -22,7 +22,7 @@
             android:contentDescription="Recorder Hub" />
     </FrameLayout>
 
-    <!-- Expanded Control Container (Hidden by default) -->
+    <!-- Expanded Control Container -->
     <LinearLayout
         android:id="@+id/layoutExpandedControls"
         android:layout_width="wrap_content"
@@ -34,16 +34,16 @@
         android:padding="6dp"
         android:gravity="center">
 
-        <!-- Start / Record Button -->
+        <!-- Start / Record Button (Play ▶) -->
         <ImageButton
             android:id="@+id/btnStart"
             android:layout_width="44dp"
             android:layout_height="44dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_play"
+            android:src="@drawable/ic_play"
             android:contentDescription="Start Recording" />
 
-        <!-- Pause / Resume Button -->
+        <!-- Pause / Resume Button (Pause ❚❚ / Play ▶) -->
         <ImageButton
             android:id="@+id/btnPauseResume"
             android:layout_width="44dp"
@@ -51,17 +51,17 @@
             android:layout_marginStart="4dp"
             android:layout_marginEnd="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_pause"
-            android:contentDescription="Pause/Resume Recording" />
+            android:src="@drawable/ic_pause"
+            android:contentDescription="Pause or Resume Recording" />
 
-        <!-- Stop Button -->
+        <!-- Stop Button (Stop ■) -->
         <ImageButton
             android:id="@+id/btnStop"
             android:layout_width="44dp"
             android:layout_height="44dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_rew"
-            android:contentDescription="Stop Recording" />
+            android:src="@drawable/ic_stop"
+            android:contentDescription="Stop and Save Recording" />
 
     </LinearLayout>
 
